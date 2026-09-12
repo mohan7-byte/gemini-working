@@ -1,0 +1,38 @@
+plugins {
+    id 'com.android.application'
+}
+
+android {
+    namespace 'com.gemini.live'
+    compileSdk 36
+
+    defaultConfig {
+        applicationId 'com.gemini.live'
+        minSdk 24
+        targetSdk 36
+        versionCode 16
+        versionName '2.3'
+    }
+
+    buildFeatures {
+        buildConfig = false
+    }
+
+    packaging {
+        resources {
+            excludes += ['/META-INF/{AL2.0,LGPL2.1}']
+        }
+    }
+
+    buildTypes {
+        debug {
+            minifyEnabled false
+        }
+        release {
+            minifyEnabled true
+            shrinkResources true
+            debuggable false
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+        }
+    }
+}
