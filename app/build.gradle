@@ -10,8 +10,8 @@ android {
         applicationId 'com.gemini.live'
         minSdk 24
         targetSdk 36
-        versionCode 16
-        versionName '2.3'
+        versionCode 17
+        versionName '3.0-native'
     }
 
     buildFeatures { buildConfig = false }
@@ -31,9 +31,4 @@ android {
     }
 }
 
-tasks.register('copyWebAsset', Copy) {
-    from(rootProject.file('index.html'))
-    into(layout.projectDirectory.dir('src/main/assets'))
-    rename { 'index.html' }
-}
-preBuild.dependsOn(tasks.named('copyWebAsset'))
+// Native-only Android app. No WebView, HTML asset copy, or JavaScript runtime.
