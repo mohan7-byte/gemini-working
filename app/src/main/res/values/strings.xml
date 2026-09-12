@@ -1,0 +1,4 @@
+<resources>
+    <string name="app_name">Voice</string>
+    <string name="accessibility_desc">Voice device automation service</string>
+</resources>
