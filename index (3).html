@@ -1,0 +1,1611 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <title>Voice</title>
+  <style>
+    :root {
+      --pill-bg: rgba(13, 16, 26, 0.94);
+      --pill-border: rgba(255, 255, 255, 0.14);
+      --sheet-bg: rgba(18, 20, 32, 0.98);
+      --text: #f8fafc;
+      --text-dim: #94a3b8;
+      --danger: #ef4444;
+      --purple: #c084fc;
+      --amber: #fbbf24;
+      --cyan: #06b6d4;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      -webkit-tap-highlight-color: transparent;
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", Roboto, sans-serif;
+      user-select: none;
+    }
+
+    html, body {
+      background: transparent !important;
+      height: 100%;
+      width: 100%;
+      overflow: hidden;
+    }
+
+    .touch-backdrop {
+      position: absolute;
+      inset: 0;
+      z-index: 1;
+      background: transparent;
+    }
+
+    .dock-container {
+      position: fixed;
+      bottom: calc(env(safe-area-inset-bottom, 16px) + 20px);
+      left: 0;
+      right: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: flex-end;
+      z-index: 10;
+      pointer-events: none;
+    }
+
+    .camera-float {
+      pointer-events: auto;
+      width: 140px;
+      height: 105px;
+      border-radius: 20px;
+      overflow: hidden;
+      border: 1.5px solid rgba(255, 255, 255, 0.25);
+      background: #000;
+      margin-bottom: 12px;
+      box-shadow: 0 16px 36px rgba(0, 0, 0, 0.75);
+      position: relative;
+      animation: popIn 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    @keyframes popIn {
+      from { transform: scale(0.8) translateY(10px); opacity: 0; }
+      to { transform: scale(1) translateY(0); opacity: 1; }
+    }
+
+    .camera-float video {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+
+    .cam-flip-btn {
+      position: absolute;
+      top: 6px;
+      right: 6px;
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      background: rgba(0, 0, 0, 0.65);
+      border: 1px solid rgba(255, 255, 255, 0.3);
+      color: #fff;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.8rem;
+      cursor: pointer;
+    }
+
+    .capsule {
+      pointer-events: auto;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 8px 14px 8px 10px;
+      background: var(--pill-bg);
+      border: 1px solid var(--pill-border);
+      border-radius: 999px;
+      box-shadow: 0 20px 45px rgba(0, 0, 0, 0.75);
+      backdrop-filter: blur(36px);
+      -webkit-backdrop-filter: blur(36px);
+      transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+      max-width: 92vw;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .task-progress-bar {
+      position: absolute;
+      bottom: 0;
+      left: 16px;
+      right: 16px;
+      height: 2.5px;
+      background: rgba(255, 255, 255, 0.06);
+      border-radius: 99px;
+      overflow: hidden;
+      opacity: 0;
+      transition: opacity 0.3s ease;
+    }
+
+    .task-progress-inner {
+      height: 100%;
+      width: 100%;
+      background: linear-gradient(90deg, transparent, #06b6d4, #a855f7, transparent);
+      transform: translateX(-100%);
+    }
+
+    .state-working .task-progress-bar { opacity: 1; }
+    .state-working .task-progress-inner {
+      animation: taskShimmer 1.3s infinite linear;
+    }
+
+    @keyframes taskShimmer {
+      0% { transform: translateX(-100%); }
+      100% { transform: translateX(100%); }
+    }
+
+    .orb-slot {
+      position: relative;
+      width: 42px;
+      height: 42px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+
+    .orb-glow {
+      position: absolute;
+      width: 100%;
+      height: 100%;
+      border-radius: 50%;
+      filter: blur(12px);
+      opacity: 0.5;
+      transition: all 0.4s ease;
+    }
+
+    .orb-core {
+      position: relative;
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      box-shadow: inset 0 2px 6px rgba(255,255,255,0.5);
+      transition: all 0.4s ease;
+      animation: coreFloat 3.5s ease-in-out infinite alternate;
+    }
+
+    @keyframes coreFloat {
+      0% { transform: scale(0.96); }
+      100% { transform: scale(1.04); }
+    }
+
+    .state-idle .orb-glow { background: rgba(99, 102, 241, 0.35); }
+    .state-idle .orb-core { background: radial-gradient(circle at 35% 35%, #a5b4fc 0%, #4338ca 100%); }
+
+    .state-listening .orb-glow {
+      background: rgba(168, 85, 247, 0.9);
+      opacity: 0.9;
+      transform: scale(1.25);
+    }
+    .state-listening .orb-core {
+      background: radial-gradient(circle at 35% 35%, #f3e8ff 0%, #a855f7 100%);
+      box-shadow: 0 0 14px rgba(168, 85, 247, 0.8), inset 0 2px 6px #fff;
+    }
+
+    .state-working .orb-glow {
+      background: rgba(6, 182, 212, 0.95);
+      opacity: 0.95;
+      transform: scale(1.35);
+      animation: workingPulse 1.2s ease-in-out infinite alternate;
+    }
+    .state-working .orb-core {
+      background: radial-gradient(circle at 35% 35%, #cffafe 0%, #06b6d4 50%, #0e7490 100%);
+      box-shadow: 0 0 18px rgba(6, 182, 212, 0.9), inset 0 2px 6px #fff;
+    }
+
+    @keyframes workingPulse {
+      0% { transform: scale(1.15); opacity: 0.75; }
+      100% { transform: scale(1.4); opacity: 1; }
+    }
+
+    .state-speaking .orb-glow {
+      background: rgba(251, 191, 36, 0.95);
+      opacity: 0.95;
+      transform: scale(1.35);
+    }
+    .state-speaking .orb-core {
+      background: radial-gradient(circle at 35% 35%, #fffbeb 0%, #f59e0b 50%, #e11d48 100%);
+      box-shadow: 0 0 18px rgba(251, 191, 36, 0.85), inset 0 2px 6px #fff;
+    }
+
+    .capsule-text {
+      display: flex;
+      flex-direction: column;
+      min-width: 90px;
+      max-width: 170px;
+    }
+
+    .capsule-status {
+      font-size: 0.82rem;
+      font-weight: 600;
+      color: var(--text);
+      letter-spacing: -0.01em;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .capsule-sub {
+      font-size: 0.68rem;
+      color: var(--text-dim);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      transition: color 0.2s ease;
+    }
+
+    .state-working .capsule-sub { color: #67e8f9; font-weight: 500; }
+
+    .action-group {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+    }
+
+    .icon-btn {
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      background: rgba(255, 255, 255, 0.08);
+      color: var(--text);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      flex-shrink: 0;
+    }
+
+    .icon-btn:active { transform: scale(0.92); background: rgba(255, 255, 255, 0.18); }
+    .icon-btn.active { background: rgba(168, 85, 247, 0.35); border-color: rgba(168, 85, 247, 0.7); color: #e9d5ff; }
+    .icon-btn.muted { background: rgba(239, 68, 68, 0.25); color: #fca5a5; border-color: rgba(239, 68, 68, 0.4); }
+
+    .btn-end { background: rgba(239, 68, 68, 0.88); color: #fff; border: 1px solid rgba(255, 255, 255, 0.2); }
+    .btn-end:active { background: var(--danger); }
+
+    .btn-start {
+      background: linear-gradient(135deg, #4338ca, #2563eb);
+      color: #fff;
+      border: 1px solid rgba(255, 255, 255, 0.25);
+      padding: 0 16px;
+      height: 36px;
+      border-radius: 999px;
+      font-size: 0.82rem;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      cursor: pointer;
+    }
+
+    .sheet {
+      pointer-events: auto;
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      background: var(--sheet-bg);
+      border-top: 1px solid rgba(255, 255, 255, 0.14);
+      border-radius: 28px 28px 0 0;
+      backdrop-filter: blur(40px);
+      -webkit-backdrop-filter: blur(40px);
+      padding: 16px 22px calc(env(safe-area-inset-bottom, 16px) + 18px) 22px;
+      transform: translateY(102%);
+      transition: transform 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+      z-index: 30;
+      max-height: 85vh;
+      overflow-y: auto;
+      color: var(--text);
+    }
+
+    .sheet.open { transform: translateY(0); }
+    .sheet-handle { width: 38px; height: 4px; background: rgba(255, 255, 255, 0.25); border-radius: 99px; margin: 0 auto 14px auto; }
+    .sheet-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; }
+    .sheet-title { font-size: 0.95rem; font-weight: 600; }
+
+    .field { margin-bottom: 12px; }
+    .field label { display: block; font-size: 0.72rem; color: var(--text-dim); margin-bottom: 5px; text-transform: uppercase; letter-spacing: 0.05em; }
+    .field input, .field select, .field textarea {
+      width: 100%;
+      background: rgba(0, 0, 0, 0.5);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      border-radius: 12px;
+      padding: 10px 12px;
+      color: #fff;
+      font-size: 0.85rem;
+      outline: none;
+      user-select: text;
+    }
+
+    .toggle-row { display: flex; justify-content: space-between; align-items: center; padding: 10px 0; border-bottom: 1px solid rgba(255, 255, 255, 0.06); }
+    .toggle-label { font-size: 0.82rem; font-weight: 500; }
+    .toggle-desc { font-size: 0.7rem; color: var(--text-dim); margin-top: 2px; }
+
+    .switch { position: relative; display: inline-block; width: 42px; height: 23px; flex-shrink: 0; }
+    .switch input { opacity: 0; width: 0; height: 0; }
+    .slider { position: absolute; cursor: pointer; inset: 0; background-color: #23293d; border-radius: 24px; transition: .3s; }
+    .slider:before { position: absolute; content: ""; height: 17px; width: 17px; left: 3px; bottom: 3px; background-color: white; border-radius: 50%; transition: .3s; }
+    input:checked + .slider { background-color: #7c3aed; }
+    input:checked + .slider:before { transform: translateX(19px); }
+
+    .action-card-btn {
+      width: 100%;
+      background: rgba(168, 85, 247, 0.12);
+      border: 1px solid rgba(168, 85, 247, 0.35);
+      color: #e9d5ff;
+      border-radius: 14px;
+      padding: 12px 14px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin: 10px 0 14px 0;
+      cursor: pointer;
+      text-align: left;
+    }
+    .action-card-btn:active { background: rgba(168, 85, 247, 0.22); }
+
+    .memory-section {
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 16px;
+      padding: 14px;
+      margin-top: 14px;
+      margin-bottom: 14px;
+    }
+
+    .memory-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 8px;
+    }
+
+    .btn-sm {
+      background: rgba(168, 85, 247, 0.25);
+      border: 1px solid rgba(168, 85, 247, 0.6);
+      color: #fff;
+      padding: 6px 12px;
+      border-radius: 8px;
+      font-size: 0.74rem;
+      cursor: pointer;
+      font-weight: 600;
+      transition: all 0.2s;
+    }
+    .btn-sm:active { transform: scale(0.95); background: rgba(168, 85, 247, 0.4); }
+
+    .btn-secondary {
+      background: rgba(255, 255, 255, 0.08);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+    }
+
+    .hidden { display: none !important; }
+  </style>
+</head>
+<body class="state-idle">
+
+  <div class="touch-backdrop" id="dismissBackdrop"></div>
+
+  <div class="dock-container">
+    <div class="camera-float hidden" id="cameraBox">
+      <video id="cameraVideo" autoplay playsinline muted></video>
+      <button class="cam-flip-btn" id="flipCameraBtn">⇄</button>
+    </div>
+
+    <div class="capsule" id="capsule">
+      <div class="orb-slot">
+        <div class="orb-glow"></div>
+        <div class="orb-core"></div>
+      </div>
+
+      <div class="capsule-text">
+        <div class="capsule-status" id="capsuleStatus">Voice</div>
+        <div class="capsule-sub" id="capsuleSub">Ready</div>
+      </div>
+
+      <div class="action-group">
+        <button class="btn-start" id="connectBtn">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path><path d="M19 10v2a7 7 0 0 1-14 0v-2"></path><line x1="12" y1="19" x2="12" y2="23"></line><line x1="8" y1="23" x2="16" y2="23"></line></svg>
+          Start
+        </button>
+
+        <div class="action-group hidden" id="liveControls">
+          <button class="icon-btn" id="toggleCameraBtn" title="Camera Vision">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 7l-7 5 7 5V7z"></path><rect x="1" y="5" width="15" height="14" rx="2" ry="2"></rect></svg>
+          </button>
+          <button class="icon-btn" id="muteBtn" title="Mute Mic">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="1" y1="1" x2="23" y2="23"></line><path d="M9 9v3a3 3 0 0 0 5.12 2.12M15 9.34V4a3 3 0 0 0-5.94-.6"></path><path d="M17 16.95A7 7 0 0 1 5 12v-2m14 0v2a7 7 0 0 1-.11 1.23"></path><line x1="12" y1="19" x2="12" y2="23"></line><line x1="8" y1="23" x2="16" y2="23"></line></svg>
+          </button>
+          <button class="icon-btn btn-end" id="disconnectBtn" title="End Call">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.68 13.31a16 16 0 0 0 3.41 2.6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7 2 2 0 0 1 1.72 2v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.42 19.42 0 0 1-6-6 19.8 19.8 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91"></path><line x1="23" y1="1" x2="1" y2="23"></line></svg>
+          </button>
+        </div>
+
+        <button class="icon-btn" id="openSettingsBtn" title="Settings">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+        </button>
+      </div>
+
+      <div class="task-progress-bar">
+        <div class="task-progress-inner"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Settings Sheet -->
+  <div class="sheet" id="settingsSheet">
+    <div class="sheet-handle"></div>
+    <div class="sheet-head">
+      <div class="sheet-title">Configuration & Knowledge</div>
+      <button class="icon-btn" id="closeSettingsBtn" style="border:none;">✕</button>
+    </div>
+
+    <div class="action-card-btn" id="openAccessibilitySettingsBtn">
+      <div>
+        <div style="font-weight: 600; font-size: 0.85rem;">⚡ Double-Click Volume Setup</div>
+        <div style="font-size: 0.72rem; opacity: 0.8; margin-top: 2px;">Tap to open Accessibility & turn on Voice trigger</div>
+      </div>
+      <span style="font-size: 1.2rem;">➔</span>
+    </div>
+
+    <!-- App Playbook & Memory Editor -->
+    <div class="memory-section">
+      <div class="memory-header">
+        <div>
+          <div style="font-weight: 600; font-size: 0.82rem;">🧠 App Playbooks & Memory</div>
+          <div style="font-size: 0.7rem; color: var(--text-dim); margin-top: 2px;">Exact coordinates & self-learned app rules</div>
+        </div>
+      </div>
+      <textarea id="rulesEditor" rows="7" style="font-family: monospace; font-size: 0.72rem; white-space: pre; margin-top: 6px;"></textarea>
+      <div style="display: flex; gap: 8px; margin-top: 8px;">
+        <button class="btn-sm" id="saveRulesBtn">💾 Save Rules</button>
+        <button class="btn-sm btn-secondary" id="openFileManagerBtn">📁 Open in My Files</button>
+      </div>
+    </div>
+
+    <div class="field">
+      <label for="apiKey">Gemini API Key</label>
+      <input type="password" id="apiKey" placeholder="AIzaSy..." />
+    </div>
+
+    <div class="toggle-row">
+      <div>
+        <div class="toggle-label">Auto-Disconnect on Silence (4s)</div>
+        <div class="toggle-desc">Automatically close after finishing action</div>
+      </div>
+      <label class="switch">
+        <input type="checkbox" id="autoDisconnectToggle" checked />
+        <span class="slider"></span>
+      </label>
+    </div>
+
+    <div class="toggle-row">
+      <div>
+        <div class="toggle-label">Auto-Connect on Launch</div>
+        <div class="toggle-desc">Listen immediately when triggered</div>
+      </div>
+      <label class="switch">
+        <input type="checkbox" id="autoConnectToggle" checked />
+        <span class="slider"></span>
+      </label>
+    </div>
+
+    <div class="toggle-row">
+      <div>
+        <div class="toggle-label">Speaker Echo Guard</div>
+        <div class="toggle-desc">Prevents speaker acoustic feedback loop</div>
+      </div>
+      <label class="switch">
+        <input type="checkbox" id="echoGuardToggle" checked />
+        <span class="slider"></span>
+      </label>
+    </div>
+
+    <div class="toggle-row">
+      <div>
+        <div class="toggle-label">Bluetooth Priority Mode</div>
+        <div class="toggle-desc">Keep audio on media speaker</div>
+      </div>
+      <label class="switch">
+        <input type="checkbox" id="btPriorityToggle" checked />
+        <span class="slider"></span>
+      </label>
+    </div>
+
+    <div class="field" style="margin-top: 14px;">
+      <label for="systemPrompt">Assistant Instructions (Jarvis Protocol)</label>
+      <textarea id="systemPrompt" rows="3" placeholder="Leave empty for Jarvis default..."></textarea>
+    </div>
+
+    <div class="field">
+      <label for="modelSelect">Target Model</label>
+      <select id="modelSelect">
+        <option value="models/gemini-3.1-flash-live-preview">gemini-3.1-flash-live-preview</option>
+        <option value="models/gemini-2.5-flash-native-audio-preview-12-2025">gemini-2.5-flash-native-audio-preview</option>
+        <option value="models/gemini-2.0-flash-exp">gemini-2.0-flash-exp</option>
+      </select>
+    </div>
+
+    <div class="field">
+      <label for="voiceSelect">Voice Profile</label>
+      <select id="voiceSelect">
+        <option value="Aoede">Aoede (Expressive)</option>
+        <option value="Puck">Puck (Natural)</option>
+        <option value="Charon">Charon (Deep)</option>
+        <option value="Fenrir">Fenrir (Calm)</option>
+        <option value="Kore">Kore (Smooth)</option>
+      </select>
+    </div>
+  </div>
+
+  <canvas id="offscreenCanvas" class="hidden" width="320" height="240"></canvas>
+
+  <script>
+    const DEFAULT_APP_RULES = {
+      "com.samsung.android.app.notes": {
+        "app_name": "Samsung Notes",
+        "actions": {
+          "add_note_button": { "x": 875, "y": 935 }
+        },
+        "rules": [
+          "To create a new note, tap the circular pen button at (875, 935) or call tap_element_id.",
+          "If the cursor is already blinking, do not tap; paste directly with type_text.",
+          "To edit existing text or change titles, use replace_text or clear_text."
+        ]
+      },
+      "com.google.android.youtube": {
+        "app_name": "YouTube",
+        "rules": [
+          "Use search_youtube for instant 1-shot searches without UI clicks."
+        ]
+      },
+      "com.whatsapp": {
+        "app_name": "WhatsApp",
+        "rules": [
+          "Use open_whatsapp to jump directly into chat with prefilled message."
+        ]
+      }
+    };
+
+    const JARVIS_DEFAULT_PROMPT = `You are Voice (Jarvis), an ultra-fast autonomous Android agent with direct device control, real-time web intelligence, and experiential memory.
+
+CORE OPERATING DIRECTIVES:
+1. REAL-TIME WEB FACTS & NEWS (SILENT WEB SEARCH):
+   - Whenever asked for real-time facts, sports scores, exam dates, schedules, or news, ALWAYS call search_internet(query).
+   - search_internet fetches live Google Search answers silently in the background. Speak the concise 1-2 sentence answer directly.
+   - NEVER call search_web or open Chrome unless explicitly told to "open browser".
+2. LIVE TELEMETRY:
+   - You already know the exact time and date from your system telemetry. Speak it immediately without using any tool.
+3. SPATIAL GROUNDING & CANDIDATE IDS:
+   - Call read_screen_text first whenever you need to interact with an app. It returns an "INTERACTIVE ELEMENTS" catalog with numbered candidate IDs [#0, #1, #2...].
+   - ALWAYS prefer calling tap_element_id(element_id) when an ID exists. It has 100% pinpoint precision (0.0px error).
+   - To hold/select files or items by candidate ID, ALWAYS call long_press_element_id(element_id).
+4. EDITING & TEXT REPLACEMENT:
+   - When editing existing fields, changing contact names, or deleting text, ALWAYS call replace_text(text) or clear_text().
+   - To insert text at the active cursor, call type_text(text).
+5. SELF-LEARNING PLAYBOOKS:
+   - When you discover a working button coordinate in an unfamiliar app, call save_app_rule so you remember it permanently!
+6. CADENCE:
+   - Execute actions silently in sequence. Speak a single, confident 1-sentence confirmation when finished.`;
+
+    let ws = null;
+    let audioCtx = null;
+    let micStream = null;
+    let micProcessor = null;
+    let isMuted = false;
+    let nextAudioTime = 0;
+    let activeSources = [];
+
+    let cameraStream = null;
+    let cameraInterval = null;
+    let isCameraActive = false;
+    let currentFacingMode = "environment";
+    const cameraBox = document.getElementById("cameraBox");
+    const cameraVideo = document.getElementById("cameraVideo");
+    const offscreenCanvas = document.getElementById("offscreenCanvas");
+    const offscreenCtx = offscreenCanvas.getContext("2d");
+
+    let isModelSpeaking = false;
+    let echoCooldownTimer = null;
+    let inactivityTimer = null;
+    let autonomousStepCount = 0;
+
+    let activePlaybooks = DEFAULT_APP_RULES;
+
+    const apiKeyInput = document.getElementById("apiKey");
+    const modelSelect = document.getElementById("modelSelect");
+    const voiceSelect = document.getElementById("voiceSelect");
+    const systemPromptInput = document.getElementById("systemPrompt");
+    const autoDisconnectToggle = document.getElementById("autoDisconnectToggle");
+    const autoConnectToggle = document.getElementById("autoConnectToggle");
+    const echoGuardToggle = document.getElementById("echoGuardToggle");
+    const btPriorityToggle = document.getElementById("btPriorityToggle");
+
+    const rulesEditor = document.getElementById("rulesEditor");
+    const saveRulesBtn = document.getElementById("saveRulesBtn");
+    const openFileManagerBtn = document.getElementById("openFileManagerBtn");
+
+    const connectBtn = document.getElementById("connectBtn");
+    const disconnectBtn = document.getElementById("disconnectBtn");
+    const muteBtn = document.getElementById("muteBtn");
+    const toggleCameraBtn = document.getElementById("toggleCameraBtn");
+    const flipCameraBtn = document.getElementById("flipCameraBtn");
+    const liveControls = document.getElementById("liveControls");
+    const dismissBackdrop = document.getElementById("dismissBackdrop");
+
+    const capsuleStatus = document.getElementById("capsuleStatus");
+    const capsuleSub = document.getElementById("capsuleSub");
+    const settingsSheet = document.getElementById("settingsSheet");
+
+    document.getElementById("openSettingsBtn").onclick = () => settingsSheet.classList.add("open");
+    document.getElementById("closeSettingsBtn").onclick = () => settingsSheet.classList.remove("open");
+
+    document.getElementById("openAccessibilitySettingsBtn").onclick = () => {
+      if (window.AndroidBridge && window.AndroidBridge.openAccessibilitySettings) {
+        window.AndroidBridge.openAccessibilitySettings();
+      }
+    };
+
+    dismissBackdrop.onclick = () => {
+      if (settingsSheet.classList.contains("open")) {
+        settingsSheet.classList.remove("open");
+        return;
+      }
+      if (window.AndroidBridge && window.AndroidBridge.minimize) {
+        window.AndroidBridge.minimize();
+      }
+    };
+
+    // Load Local Rules & Settings
+    try {
+      const savedRules = localStorage.getItem("jarvis_app_rules");
+      if (savedRules) {
+        activePlaybooks = JSON.parse(savedRules);
+      }
+      rulesEditor.value = JSON.stringify(activePlaybooks, null, 2);
+
+      if (localStorage.getItem("gemini_live_key")) apiKeyInput.value = localStorage.getItem("gemini_live_key");
+      if (localStorage.getItem("gemini_live_voice")) voiceSelect.value = localStorage.getItem("gemini_live_voice");
+      if (localStorage.getItem("gemini_live_model")) modelSelect.value = localStorage.getItem("gemini_live_model");
+
+      if (localStorage.getItem("gemini_live_has_saved_prompt") === "true") {
+        systemPromptInput.value = localStorage.getItem("gemini_live_system_prompt") || "";
+      } else {
+        systemPromptInput.value = JARVIS_DEFAULT_PROMPT;
+      }
+
+      if (localStorage.getItem("gemini_live_auto_disconnect") !== null) autoDisconnectToggle.checked = localStorage.getItem("gemini_live_auto_disconnect") === "true";
+      if (localStorage.getItem("gemini_live_auto_connect") !== null) autoConnectToggle.checked = localStorage.getItem("gemini_live_auto_connect") === "true";
+      if (localStorage.getItem("gemini_live_echo_guard") !== null) echoGuardToggle.checked = localStorage.getItem("gemini_live_echo_guard") === "true";
+      if (localStorage.getItem("gemini_live_bt_priority") !== null) btPriorityToggle.checked = localStorage.getItem("gemini_live_bt_priority") === "true";
+    } catch(e) {}
+
+    saveRulesBtn.onclick = () => {
+      try {
+        const parsed = JSON.parse(rulesEditor.value);
+        activePlaybooks = parsed;
+        localStorage.setItem("jarvis_app_rules", JSON.stringify(activePlaybooks, null, 2));
+        if (window.AndroidBridge && window.AndroidBridge.saveRulesToFile) {
+          window.AndroidBridge.saveRulesToFile(JSON.stringify(activePlaybooks, null, 2));
+        }
+        alert("Rules saved successfully!");
+      } catch(err) {
+        alert("Invalid JSON: " + err.message);
+      }
+    };
+
+    openFileManagerBtn.onclick = () => {
+      if (window.AndroidBridge && window.AndroidBridge.openRulesInFileManager) {
+        window.AndroidBridge.openRulesInFileManager();
+      }
+    };
+
+    voiceSelect.onchange = () => localStorage.setItem("gemini_live_voice", voiceSelect.value);
+    modelSelect.onchange = () => localStorage.setItem("gemini_live_model", modelSelect.value);
+    systemPromptInput.addEventListener("input", () => {
+      localStorage.setItem("gemini_live_has_saved_prompt", "true");
+      localStorage.setItem("gemini_live_system_prompt", systemPromptInput.value);
+    });
+    autoDisconnectToggle.onchange = () => localStorage.setItem("gemini_live_auto_disconnect", autoDisconnectToggle.checked);
+    autoConnectToggle.onchange = () => localStorage.setItem("gemini_live_auto_connect", autoConnectToggle.checked);
+    echoGuardToggle.onchange = () => localStorage.setItem("gemini_live_echo_guard", echoGuardToggle.checked);
+    btPriorityToggle.onchange = () => localStorage.setItem("gemini_live_bt_priority", btPriorityToggle.checked);
+
+    function setVisualState(state, status, sub) {
+      document.body.className = `state-${state}`;
+      capsuleStatus.innerText = status;
+      capsuleSub.innerText = sub;
+    }
+
+    function getActionDescription(name, args) {
+      switch(name) {
+        case "search_internet": return `Searching web silently...`;
+        case "tap_element_id": return `Tapping button #${args.element_id}...`;
+        case "long_press_element_id": return `Holding item #${args.element_id}...`;
+        case "replace_text": {
+          const preview = (args.text || '').length > 15 ? (args.text || '').substring(0, 12) + '...' : (args.text || '');
+          return `Replacing text: "${preview}"`;
+        }
+        case "clear_text": return `Clearing text field...`;
+        case "get_device_info": return `Checking time & status...`;
+        case "save_app_rule": return `Learning app rule...`;
+        case "create_note": return `Creating note...`;
+        case "open_application": return `Opening ${args.app_name || 'app'}...`;
+        case "type_text": {
+          const preview = (args.text || '').length > 18 ? (args.text || '').substring(0, 15) + '...' : (args.text || '');
+          return `Typing: "${preview}"`;
+        }
+        case "tap_element": return `Tapping "${args.label || 'button'}"...`;
+        case "tap_coordinates": return `Tapping (${args.x}, ${args.y})...`;
+        case "long_press": return `Holding (${args.x}, ${args.y})...`;
+        case "scroll": return `Scrolling ${args.direction || 'down'}...`;
+        case "swipe": return `Swiping screen...`;
+        case "wait_seconds": return `Waiting for UI (${args.seconds || 1}s)...`;
+        case "read_screen_text": return `Reading screen catalog...`;
+        case "capture_screen": return `Analyzing screen image...`;
+        case "search_contacts": return `Searching contact "${args.query || ''}"...`;
+        case "search_youtube": return `Searching YouTube...`;
+        case "search_web": return `Opening Google in browser...`;
+        case "open_whatsapp": return `Opening WhatsApp...`;
+        case "make_phone_call": return `Calling ${args.phone_number || ''}...`;
+        case "send_sms": return `Sending SMS...`;
+        case "toggle_flashlight": return `Toggling flashlight...`;
+        case "set_volume": return `Setting volume...`;
+        case "navigate_system": return `Navigating ${args.action || ''}...`;
+        default: return `Executing action...`;
+      }
+    }
+
+    function resetInactivityTimer() {
+      if (inactivityTimer) {
+        clearTimeout(inactivityTimer);
+        inactivityTimer = null;
+      }
+    }
+
+    function startInactivityCountdown() {
+      resetInactivityTimer();
+      if (!autoDisconnectToggle.checked || !ws || ws.readyState !== WebSocket.OPEN) return;
+
+      inactivityTimer = setTimeout(() => {
+        if (!isModelSpeaking && activeSources.length === 0) {
+          cleanUpSession();
+          if (window.AndroidBridge && window.AndroidBridge.closeApp) {
+            window.AndroidBridge.closeApp();
+          }
+        }
+      }, 4000);
+    }
+
+    const deviceTools = [
+      {
+        functionDeclarations: [
+          {
+            name: "search_internet",
+            description: "Silently fetch real-time live facts, sports scores, exam dates, or web answers in the background without opening the browser.",
+            parameters: {
+              type: "OBJECT",
+              properties: {
+                query: { type: "STRING", description: "The live search query to look up on the web" }
+              },
+              required: ["query"]
+            }
+          },
+          {
+            name: "tap_element_id",
+            description: "Directly tap a UI element by its candidate ID (#0, #1, #2...) obtained from read_screen_text. Has 100% pinpoint accuracy (0.0px error).",
+            parameters: {
+              type: "OBJECT",
+              properties: {
+                element_id: { type: "INTEGER", description: "The numeric ID of the element to tap" }
+              },
+              required: ["element_id"]
+            }
+          },
+          {
+            name: "long_press_element_id",
+            description: "Directly hold down/long-press on a candidate item/file by its ID (#0, #1, #2...) to select, delete, or trigger context menus (0.0px error).",
+            parameters: {
+              type: "OBJECT",
+              properties: {
+                element_id: { type: "INTEGER", description: "The numeric ID of the element to hold" }
+              },
+              required: ["element_id"]
+            }
+          },
+          {
+            name: "replace_text",
+            description: "Erase existing text in the active editable field/contact and replace it cleanly with new text (zero appending errors).",
+            parameters: {
+              type: "OBJECT",
+              properties: {
+                text: { type: "STRING", description: "The new text to replace the existing content with" }
+              },
+              required: ["text"]
+            }
+          },
+          {
+            name: "clear_text",
+            description: "Completely clear/delete all existing text in the active editable input field.",
+            parameters: { type: "OBJECT", properties: {} }
+          },
+          {
+            name: "get_device_info",
+            description: "Get real-time local time, date, battery level, network status, and device telemetry without opening the browser.",
+            parameters: { type: "OBJECT", properties: {} }
+          },
+          {
+            name: "save_app_rule",
+            description: "Permanently save a newly learned UI button coordinate, playbook rule, or shortcut for an app so you remember it in all future sessions.",
+            parameters: {
+              type: "OBJECT",
+              properties: {
+                app_package: { type: "STRING", description: "Package name or identifier (e.g. com.android.chrome)" },
+                action_name: { type: "STRING", description: "Action identifier (e.g. download_button, search_bar)" },
+                x: { type: "INTEGER", description: "Normalized X coordinate (0-1000)" },
+                y: { type: "INTEGER", description: "Normalized Y coordinate (0-1000)" },
+                rule: { type: "STRING", description: "Key lesson or tip to remember" }
+              },
+              required: ["app_package", "action_name"]
+            }
+          },
+          {
+            name: "create_note",
+            description: "Instantly create a note or document with the provided text body via Android intent (zero-failure).",
+            parameters: {
+              type: "OBJECT",
+              properties: {
+                text: { type: "STRING", description: "The note content" }
+              },
+              required: ["text"]
+            }
+          },
+          {
+            name: "type_text",
+            description: "Insert text directly into the active editable field or open note on screen (automatically handles soft keyboard and pastes at blinking cursor).",
+            parameters: {
+              type: "OBJECT",
+              properties: {
+                text: { type: "STRING", description: "The exact text to type or write" }
+              },
+              required: ["text"]
+            }
+          },
+          {
+            name: "tap_coordinates",
+            description: "Physically tap screen coordinates. Use normalized 0 to 1000 scale (where x=500, y=500 is the center of screen).",
+            parameters: {
+              type: "OBJECT",
+              properties: {
+                x: { type: "INTEGER", description: "X coordinate (0 to 1000)" },
+                y: { type: "INTEGER", description: "Y coordinate (0 to 1000)" }
+              },
+              required: ["x", "y"]
+            }
+          },
+          {
+            name: "long_press",
+            description: "Hold down / long-press on coordinates (0 to 1000) for 700ms to select text, open context menus, or trigger special actions.",
+            parameters: {
+              type: "OBJECT",
+              properties: {
+                x: { type: "INTEGER", description: "X coordinate (0 to 1000)" },
+                y: { type: "INTEGER", description: "Y coordinate (0 to 1000)" }
+              },
+              required: ["x", "y"]
+            }
+          },
+          {
+            name: "tap_element",
+            description: "Click a UI element or button matching a label or description",
+            parameters: {
+              type: "OBJECT",
+              properties: {
+                label: { type: "STRING", description: "Text or label of the item to tap" }
+              },
+              required: ["label"]
+            }
+          },
+          {
+            name: "scroll",
+            description: "Scroll screen up or down",
+            parameters: {
+              type: "OBJECT",
+              properties: {
+                direction: { type: "STRING", enum: ["down", "up"] }
+              },
+              required: ["direction"]
+            }
+          },
+          {
+            name: "swipe",
+            description: "Simulate a physical finger swipe across screen",
+            parameters: {
+              type: "OBJECT",
+              properties: {
+                start_x: { type: "INTEGER" },
+                start_y: { type: "INTEGER" },
+                end_x: { type: "INTEGER" },
+                end_y: { type: "INTEGER" },
+                duration_ms: { type: "INTEGER" }
+              },
+              required: ["start_x", "start_y", "end_x", "end_y"]
+            }
+          },
+          {
+            name: "wait_seconds",
+            description: "Pause execution for 1 to 4 seconds for screen/app to load",
+            parameters: {
+              type: "OBJECT",
+              properties: {
+                seconds: { type: "NUMBER" }
+              },
+              required: ["seconds"]
+            }
+          },
+          {
+            name: "read_screen_text",
+            description: "Extract visible text, candidate elements catalog with IDs, and active app playbook memory.",
+            parameters: { type: "OBJECT", properties: {} }
+          },
+          {
+            name: "capture_screen",
+            description: "Capture screenshot to visually analyze layout or image buttons",
+            parameters: { type: "OBJECT", properties: {} }
+          },
+          {
+            name: "open_application",
+            description: "Launch an app by name (e.g. Notes, WhatsApp, Chrome)",
+            parameters: {
+              type: "OBJECT",
+              properties: {
+                app_name: { type: "STRING" }
+              },
+              required: ["app_name"]
+            }
+          },
+          {
+            name: "search_contacts",
+            description: "Search contact phone number by name",
+            parameters: {
+              type: "OBJECT",
+              properties: {
+                query: { type: "STRING" }
+              },
+              required: ["query"]
+            }
+          },
+          {
+            name: "search_youtube",
+            description: "Open YouTube searching for a video or query",
+            parameters: {
+              type: "OBJECT",
+              properties: {
+                query: { type: "STRING" }
+              },
+              required: ["query"]
+            }
+          },
+          {
+            name: "search_web",
+            description: "Explicitly open Google Search in the Chrome browser on screen (use only when user says open browser)",
+            parameters: {
+              type: "OBJECT",
+              properties: {
+                query: { type: "STRING" }
+              },
+              required: ["query"]
+            }
+          },
+          {
+            name: "open_whatsapp",
+            description: "Open WhatsApp chat with prefilled message",
+            parameters: {
+              type: "OBJECT",
+              properties: {
+                phone_number: { type: "STRING" },
+                message: { type: "STRING" }
+              },
+              required: ["phone_number", "message"]
+            }
+          },
+          {
+            name: "toggle_flashlight",
+            description: "Turn flashlight on or off",
+            parameters: {
+              type: "OBJECT",
+              properties: {
+                state: { type: "BOOLEAN" }
+              },
+              required: ["state"]
+            }
+          },
+          {
+            name: "set_volume",
+            description: "Set volume (0 to 100)",
+            parameters: {
+              type: "OBJECT",
+              properties: {
+                level_percent: { type: "INTEGER" }
+              },
+              required: ["level_percent"]
+            }
+          },
+          {
+            name: "navigate_system",
+            description: "System navigation (home, back, recents, lock, notifications)",
+            parameters: {
+              type: "OBJECT",
+              properties: {
+                action: { type: "STRING", enum: ["home", "back", "recents", "notifications", "quick_settings", "lock"] }
+              },
+              required: ["action"]
+            }
+          },
+          {
+            name: "make_phone_call",
+            description: "Call a phone number",
+            parameters: {
+              type: "OBJECT",
+              properties: {
+                phone_number: { type: "STRING" }
+              },
+              required: ["phone_number"]
+            }
+          },
+          {
+            name: "send_sms",
+            description: "Send an SMS text message",
+            parameters: {
+              type: "OBJECT",
+              properties: {
+                phone_number: { type: "STRING" },
+                message: { type: "STRING" }
+              },
+              required: ["phone_number", "message"]
+            }
+          }
+        ]
+      }
+    ];
+
+    connectBtn.addEventListener("click", async () => {
+      const key = apiKeyInput.value.trim();
+      if (!key) {
+        settingsSheet.classList.add("open");
+        return;
+      }
+      try { localStorage.setItem("gemini_live_key", key); } catch(e) {}
+
+      resetInactivityTimer();
+      setVisualState("idle", "Connecting...", "Initializing");
+
+      const useBtPriority = btPriorityToggle.checked;
+      const audioConstraints = useBtPriority
+        ? { channelCount: 1, sampleRate: 16000, echoCancellation: false, noiseSuppression: false, autoGainControl: false }
+        : { channelCount: 1, sampleRate: 16000, echoCancellation: true, noiseSuppression: true };
+
+      try {
+        micStream = await navigator.mediaDevices.getUserMedia({ audio: audioConstraints });
+      } catch (err) {
+        setVisualState("idle", "Mic Blocked", "Access Denied");
+        return;
+      }
+
+      const AudioCtxClass = window.AudioContext || window.webkitAudioContext;
+      audioCtx = new AudioCtxClass({ sampleRate: 24000 });
+      if (audioCtx.state === "suspended") await audioCtx.resume();
+
+      const chosenModel = modelSelect.value.trim();
+      const endpoint = `wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent?key=${encodeURIComponent(key)}`;
+
+      try {
+        ws = new WebSocket(endpoint);
+      } catch (e) {
+        return;
+      }
+
+      ws.onopen = () => {
+        const now = new Date();
+        const liveContext = `\n\nLIVE DEVICE TELEMETRY:\n- Exact Local Time: ${now.toLocaleTimeString()}\n- Current Date: ${now.toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}\n- Timezone: ${Intl.DateTimeFormat().resolvedOptions().timeZone}\nAnswer all questions about the current time, weekday, and date immediately from this telemetry without calling any tool.`;
+        
+        const promptText = (systemPromptInput.value.trim() || JARVIS_DEFAULT_PROMPT) + liveContext;
+
+        const setupPayload = {
+          setup: {
+            model: chosenModel,
+            generationConfig: {
+              responseModalities: ["AUDIO"],
+              speechConfig: {
+                voiceConfig: {
+                  prebuiltVoiceConfig: { voiceName: voiceSelect.value }
+                }
+              }
+            },
+            systemInstruction: { parts: [{ text: promptText }] },
+            tools: deviceTools
+          }
+        };
+
+        ws.send(JSON.stringify(setupPayload));
+        startMicCapture();
+
+        connectBtn.classList.add("hidden");
+        liveControls.classList.remove("hidden");
+        setVisualState("listening", "Listening", "Go ahead");
+      };
+
+      ws.onmessage = async (evt) => {
+        let raw = evt.data;
+        if (raw instanceof Blob) raw = await raw.text();
+        try {
+          const res = JSON.parse(raw);
+          handleServerTurn(res);
+        } catch(e) {}
+      };
+
+      ws.onclose = () => cleanUpSession();
+    });
+
+    async function executeLocalTool(name, args, id) {
+      resetInactivityTimer();
+      autonomousStepCount++;
+
+      const actionDesc = getActionDescription(name, args);
+      setVisualState("working", `Working • Step ${autonomousStepCount}`, actionDesc);
+
+      if (window.AndroidBridge && window.AndroidBridge.showTaskProgress) {
+        window.AndroidBridge.showTaskProgress(autonomousStepCount, actionDesc);
+      }
+
+      if (autonomousStepCount > 10) {
+        sendToolResponse(id, "Safety limit reached. Pausing autonomous loop.");
+        autonomousStepCount = 0;
+        return;
+      }
+
+      let result = "Action completed";
+      try {
+        if (name === "search_internet") {
+          const key = apiKeyInput.value.trim();
+          try {
+            const searchEndpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${encodeURIComponent(key)}`;
+            const searchRes = await fetch(searchEndpoint, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                contents: [{ parts: [{ text: `Answer factually, directly and accurately in 1 to 2 concise sentences based on live web search: ${args.query}` }] }],
+                tools: [{ google_search: {} }]
+              })
+            });
+            const data = await searchRes.json();
+            result = data.candidates?.[0]?.content?.parts?.[0]?.text || "Could not retrieve live information.";
+          } catch(err) {
+            result = "Web search error: " + err.message;
+          }
+        } else if (name === "get_device_info") {
+          const now = new Date();
+          let batteryLevel = "Unknown";
+          if (navigator.getBattery) {
+            try {
+              const b = await navigator.getBattery();
+              batteryLevel = Math.round(b.level * 100) + "%" + (b.charging ? " (Charging)" : "");
+            } catch(e) {}
+          }
+          result = JSON.stringify({
+            current_time: now.toLocaleTimeString(),
+            current_date: now.toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }),
+            timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+            battery: batteryLevel,
+            online: navigator.onLine
+          });
+        } else if (!window.AndroidBridge) {
+          result = "Android native bridge not ready.";
+        } else if (name === "tap_element_id") {
+          result = window.AndroidBridge.tapElementId(args.element_id !== undefined ? args.element_id : 0);
+        } else if (name === "long_press_element_id") {
+          result = window.AndroidBridge.longPressElementId(args.element_id !== undefined ? args.element_id : 0);
+        } else if (name === "replace_text") {
+          result = window.AndroidBridge.replaceText(args.text || "");
+        } else if (name === "clear_text") {
+          result = window.AndroidBridge.clearText();
+        } else if (name === "save_app_rule") {
+          const pkg = (args.app_package || "").trim();
+          if (pkg) {
+            if (!activePlaybooks[pkg]) activePlaybooks[pkg] = { actions: {}, rules: [] };
+            if (args.action_name && (args.x !== undefined || args.y !== undefined)) {
+              activePlaybooks[pkg].actions[args.action_name] = { x: args.x || 0, y: args.y || 0 };
+            }
+            if (args.rule) {
+              activePlaybooks[pkg].rules.push(args.rule);
+            }
+            localStorage.setItem("jarvis_app_rules", JSON.stringify(activePlaybooks, null, 2));
+            rulesEditor.value = JSON.stringify(activePlaybooks, null, 2);
+            if (window.AndroidBridge.saveRulesToFile) {
+              window.AndroidBridge.saveRulesToFile(JSON.stringify(activePlaybooks, null, 2));
+            }
+            result = `Saved rule for ${pkg} into persistent memory.`;
+          } else {
+            result = "Error: App package required.";
+          }
+        } else if (name === "create_note") {
+          result = window.AndroidBridge.createNote(args.text || "");
+        } else if (name === "type_text") {
+          result = window.AndroidBridge.typeText(args.text || "");
+        } else if (name === "tap_element") {
+          result = window.AndroidBridge.tapElement(args.label || "");
+        } else if (name === "tap_coordinates") {
+          result = window.AndroidBridge.tapCoordinates(args.x || 0, args.y || 0);
+        } else if (name === "long_press") {
+          result = window.AndroidBridge.longPress(args.x || 0, args.y || 0);
+        } else if (name === "scroll") {
+          result = window.AndroidBridge.scroll(args.direction || "down");
+        } else if (name === "swipe") {
+          result = window.AndroidBridge.swipe(args.start_x || 0, args.start_y || 0, args.end_x || 0, args.end_y || 0, args.duration_ms || 300);
+        } else if (name === "wait_seconds") {
+          const s = Math.min(Math.max(args.seconds || 1, 0.5), 4);
+          await new Promise(r => setTimeout(r, s * 1000));
+          result = "Waited " + s + " seconds.";
+        } else if (name === "read_screen_text") {
+          let screenRaw = window.AndroidBridge.readScreenText();
+
+          let matchedRules = "";
+          for (const [pkg, data] of Object.entries(activePlaybooks)) {
+            if (screenRaw.includes(pkg) || screenRaw.toLowerCase().includes((data.app_name || "").toLowerCase())) {
+              matchedRules += `\n[PLAYBOOK TIP FOR ${data.app_name || pkg}]:\n`;
+              if (data.actions) {
+                for (const [act, coords] of Object.entries(data.actions)) {
+                  matchedRules += `- Target "${act}" is at exact coordinates (${coords.x}, ${coords.y})\n`;
+                }
+              }
+              if (data.rules) {
+                for (const r of data.rules) matchedRules += `- Rule: ${r}\n`;
+              }
+            }
+          }
+
+          if (matchedRules) {
+            result = `=== ACTIVE APP PLAYBOOK & MEMORY ===${matchedRules}\n\n${screenRaw}`;
+          } else {
+            result = screenRaw;
+          }
+        } else if (name === "capture_screen") {
+          const b64 = window.AndroidBridge.captureScreen();
+          if (b64 && b64.length > 100) {
+            if (ws && ws.readyState === WebSocket.OPEN) {
+              ws.send(JSON.stringify({
+                realtimeInput: {
+                  video: { data: b64, mimeType: "image/jpeg" }
+                }
+              }));
+            }
+            result = "Screenshot captured and injected into your visual feed.";
+          } else {
+            result = b64 || "Failed to capture screenshot.";
+          }
+        } else if (name === "open_application") {
+          result = window.AndroidBridge.openApp(args.app_name || "");
+        } else if (name === "search_contacts") {
+          result = window.AndroidBridge.searchContacts(args.query || "");
+        } else if (name === "search_youtube") {
+          result = window.AndroidBridge.searchYouTube(args.query || "");
+        } else if (name === "search_web") {
+          result = window.AndroidBridge.searchWeb(args.query || "");
+        } else if (name === "open_whatsapp") {
+          result = window.AndroidBridge.openWhatsAppChat(args.phone_number || "", args.message || "");
+        } else if (name === "toggle_flashlight") {
+          result = window.AndroidBridge.toggleFlashlight(!!args.state);
+        } else if (name === "set_volume") {
+          result = window.AndroidBridge.setVolume(args.level_percent || 50);
+        } else if (name === "navigate_system") {
+          result = window.AndroidBridge.navigateSystem(args.action || "home");
+        } else if (name === "make_phone_call") {
+          result = window.AndroidBridge.makePhoneCall(args.phone_number || "");
+        } else if (name === "send_sms") {
+          result = window.AndroidBridge.sendSms(args.phone_number || "", args.message || "");
+        }
+      } catch (err) {
+        result = "Error executing tool: " + err.message;
+      }
+
+      sendToolResponse(id, result);
+    }
+
+    function sendToolResponse(id, result) {
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        const payload = {
+          toolResponse: {
+            functionResponses: [
+              {
+                id: id || "call_1",
+                response: { output: { result: String(result) } }
+              }
+            ]
+          }
+        };
+        ws.send(JSON.stringify(payload));
+      }
+    }
+
+    toggleCameraBtn.addEventListener("click", async () => {
+      if (!isCameraActive) {
+        await startCameraVision();
+      } else {
+        stopCameraVision();
+      }
+    });
+
+    async function startCameraVision() {
+      try {
+        cameraStream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: currentFacingMode, width: { ideal: 320 }, height: { ideal: 240 } },
+          audio: false
+        });
+        cameraVideo.srcObject = cameraStream;
+        cameraBox.classList.remove("hidden");
+        toggleCameraBtn.classList.add("active");
+        isCameraActive = true;
+        startCameraStreaming();
+      } catch(e) {
+        toggleCameraBtn.classList.remove("active");
+      }
+    }
+
+    function stopCameraVision() {
+      if (cameraInterval) { clearInterval(cameraInterval); cameraInterval = null; }
+      if (cameraStream) { cameraStream.getTracks().forEach(t => t.stop()); cameraStream = null; }
+      cameraBox.classList.add("hidden");
+      toggleCameraBtn.classList.remove("active");
+      isCameraActive = false;
+    }
+
+    flipCameraBtn.onclick = async () => {
+      currentFacingMode = currentFacingMode === "environment" ? "user" : "environment";
+      if (cameraStream) cameraStream.getTracks().forEach(t => t.stop());
+      await startCameraVision();
+    };
+
+    function startCameraStreaming() {
+      if (cameraInterval) clearInterval(cameraInterval);
+      cameraInterval = setInterval(() => {
+        if (!ws || ws.readyState !== WebSocket.OPEN || !cameraStream || !isCameraActive) return;
+        if (cameraVideo.readyState < 2 || cameraVideo.videoWidth === 0) return;
+
+        offscreenCtx.drawImage(cameraVideo, 0, 0, 320, 240);
+        const dataUrl = offscreenCanvas.toDataURL("image/jpeg", 0.5);
+        const parts = dataUrl.split(",");
+        if (parts.length < 2) return;
+
+        ws.send(JSON.stringify({
+          realtimeInput: {
+            video: { data: parts[1].trim(), mimeType: "image/jpeg" }
+          }
+        }));
+      }, 1500);
+    }
+
+    function startMicCapture() {
+      const micCtx = new (window.AudioContext || window.webkitAudioContext)();
+      const source = micCtx.createMediaStreamSource(micStream);
+
+      micProcessor = micCtx.createScriptProcessor(2048, 1, 1);
+      micProcessor.onaudioprocess = (e) => {
+        if (!ws || ws.readyState !== WebSocket.OPEN) return;
+        if (echoGuardToggle.checked && isModelSpeaking) return;
+        if (isMuted) return;
+
+        const channel = e.inputBuffer.getChannelData(0);
+
+        let sum = 0;
+        for (let i = 0; i < channel.length; i++) sum += channel[i] * channel[i];
+        if (Math.sqrt(sum / channel.length) > 0.02) {
+          resetInactivityTimer();
+          autonomousStepCount = 0;
+        }
+
+        const downsampled = downsample(channel, micCtx.sampleRate, 16000);
+        const pcm16 = toPCM16(downsampled);
+        const b64 = bufferToBase64(pcm16);
+
+        ws.send(JSON.stringify({
+          realtimeInput: {
+            audio: { data: b64, mimeType: "audio/pcm;rate=16000" }
+          }
+        }));
+      };
+
+      source.connect(micProcessor);
+      micProcessor.connect(micCtx.destination);
+    }
+
+    function handleServerTurn(msg) {
+      if (msg.toolCall && msg.toolCall.functionCalls) {
+        resetInactivityTimer();
+        for (const call of msg.toolCall.functionCalls) {
+          executeLocalTool(call.name, call.args, call.id);
+        }
+      }
+
+      if (!msg.serverContent) return;
+
+      if (msg.serverContent.interrupted) {
+        stopAudioPlayback();
+        isModelSpeaking = false;
+        setVisualState("listening", "Listening", "Go ahead");
+        resetInactivityTimer();
+        return;
+      }
+
+      const parts = msg.serverContent.modelTurn?.parts;
+      if (parts) {
+        for (const part of parts) {
+          if (part.functionCall) {
+            resetInactivityTimer();
+            executeLocalTool(part.functionCall.name, part.functionCall.args, part.functionCall.id || "1");
+          }
+          const b64 = part.inlineData?.data || part.data;
+          if (b64) {
+            resetInactivityTimer();
+            if (echoCooldownTimer) {
+              clearTimeout(echoCooldownTimer);
+              echoCooldownTimer = null;
+            }
+            isModelSpeaking = true;
+            playPCM(b64);
+          }
+        }
+      }
+
+      if (msg.serverContent.turnComplete) scheduleTurnEnd();
+    }
+
+    function playPCM(base64Audio) {
+      setVisualState("speaking", "Speaking", "Jarvis...");
+
+      if (audioCtx && audioCtx.state === "suspended") {
+        audioCtx.resume();
+      }
+
+      const binary = atob(base64Audio);
+      const len = binary.length;
+      const bytes = new Uint8Array(len);
+      for (let i = 0; i < len; i++) bytes[i] = binary.charCodeAt(i);
+
+      const pcm16 = new Int16Array(bytes.buffer);
+      const float32 = new Float32Array(pcm16.length);
+      for (let i = 0; i < pcm16.length; i++) float32[i] = pcm16[i] / 32768.0;
+
+      const buffer = audioCtx.createBuffer(1, float32.length, 24000);
+      buffer.copyToChannel(float32, 0);
+
+      const src = audioCtx.createBufferSource();
+      src.buffer = buffer;
+      src.connect(audioCtx.destination);
+
+      const now = audioCtx.currentTime;
+      if (nextAudioTime < now) nextAudioTime = now + 0.05;
+      src.start(nextAudioTime);
+      nextAudioTime += buffer.duration;
+
+      activeSources.push(src);
+      src.onended = () => {
+        const idx = activeSources.indexOf(src);
+        if (idx !== -1) activeSources.splice(idx, 1);
+        if (activeSources.length === 0) scheduleTurnEnd();
+      };
+    }
+
+    function scheduleTurnEnd() {
+      if (activeSources.length > 0) return;
+      if (echoCooldownTimer) clearTimeout(echoCooldownTimer);
+      echoCooldownTimer = setTimeout(() => {
+        isModelSpeaking = false;
+        echoCooldownTimer = null;
+        if (ws && ws.readyState === WebSocket.OPEN) {
+          setVisualState("listening", "Listening", "Go ahead");
+          startInactivityCountdown();
+        }
+      }, 350);
+    }
+
+    function stopAudioPlayback() {
+      activeSources.forEach(s => { try { s.stop(); } catch(e){} });
+      activeSources = [];
+      if (audioCtx) nextAudioTime = audioCtx.currentTime;
+    }
+
+    function downsample(buf, inRate, outRate) {
+      if (inRate === outRate) return buf;
+      const ratio = inRate / outRate;
+      const len = Math.round(buf.length / ratio);
+      const out = new Float32Array(len);
+      let oR = 0, oB = 0;
+      while (oR < len) {
+        const next = Math.round((oR + 1) * ratio);
+        let sum = 0, count = 0;
+        for (let i = oB; i < next && i < buf.length; i++) { sum += buf[i]; count++; }
+        out[oR] = count > 0 ? sum / count : 0;
+        oR++;
+        oB = next;
+      }
+      return out;
+    }
+
+    function toPCM16(input) {
+      const out = new Int16Array(input.length);
+      for (let i = 0; i < input.length; i++) {
+        const s = Math.max(-1, Math.min(1, input[i]));
+        out[i] = s < 0 ? s * 0x8000 : s * 0x7fff;
+      }
+      return out.buffer;
+    }
+
+    function bufferToBase64(buffer) {
+      let bin = "";
+      const bytes = new Uint8Array(buffer);
+      for (let i = 0; i < bytes.byteLength; i += 1024) {
+        bin += String.fromCharCode.apply(null, bytes.subarray(i, Math.min(i + 1024, bytes.byteLength)));
+      }
+      return window.btoa(bin);
+    }
+
+    muteBtn.addEventListener("click", () => {
+      isMuted = !isMuted;
+      muteBtn.classList.toggle("muted", isMuted);
+    });
+
+    disconnectBtn.addEventListener("click", () => {
+      resetInactivityTimer();
+      if (ws) ws.close();
+      cleanUpSession();
+      if (window.AndroidBridge && window.AndroidBridge.closeApp) {
+        window.AndroidBridge.closeApp();
+      }
+    });
+
+    function cleanUpSession() {
+      resetInactivityTimer();
+      stopAudioPlayback();
+      stopCameraVision();
+      if (echoCooldownTimer) clearTimeout(echoCooldownTimer);
+      isModelSpeaking = false;
+      autonomousStepCount = 0;
+
+      if (micStream) {
+        micStream.getTracks().forEach(t => t.stop());
+        micStream = null;
+      }
+      if (micProcessor) {
+        micProcessor.disconnect();
+        micProcessor = null;
+      }
+      isMuted = false;
+      muteBtn.classList.remove("muted");
+      connectBtn.classList.remove("hidden");
+      liveControls.classList.add("hidden");
+      setVisualState("idle", "Voice", "Ready");
+    }
+
+    window.autoConnectOnWake = function() {
+      if (autoConnectToggle.checked && apiKeyInput.value.trim() && (!ws || ws.readyState !== WebSocket.OPEN)) {
+        connectBtn.click();
+      }
+    };
+
+    window.addEventListener("DOMContentLoaded", () => {
+      if (autoConnectToggle.checked && apiKeyInput.value.trim()) {
+        setTimeout(() => connectBtn.click(), 250);
+      }
+    });
+  </script>
+</body>
+</html>
