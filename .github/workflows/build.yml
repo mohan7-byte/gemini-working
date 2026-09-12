@@ -23,14 +23,16 @@ jobs:
 
       - name: Android SDK
         uses: android-actions/setup-android@v3
+        with:
+          packages: platform-tools
 
       - name: Install Android SDK 36
         run: sdkmanager "platforms;android-36" "build-tools;36.0.0"
 
-      - name: Gradle 9.6
+      - name: Gradle 9.6.0
         uses: gradle/actions/setup-gradle@v6
         with:
-          gradle-version: '9.6'
+          gradle-version: '9.6.0'
 
       - name: Verify project
         run: gradle :app:assembleDebug --stacktrace --no-daemon
@@ -49,5 +51,3 @@ jobs:
         with:
           name: Voice-release-apk
           path: app/build/outputs/apk/release/app-release.apk
-
-      # Permanent Android project; source lives in app/, UI remains index.html.
