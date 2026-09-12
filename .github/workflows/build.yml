@@ -49,3 +49,5 @@ jobs:
         with:
           name: Voice-release-apk
           path: app/build/outputs/apk/release/app-release.apk
+
+      # Permanent Android project; source lives in app/, UI remains index.html.
