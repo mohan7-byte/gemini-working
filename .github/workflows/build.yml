@@ -1,4 +1,4 @@
-name: Build Voice APK
+name: Build Voice APK (native)
 
 on:
   push:
