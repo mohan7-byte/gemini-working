@@ -14,20 +14,14 @@ android {
         versionName '2.3'
     }
 
-    buildFeatures {
-        buildConfig = false
-    }
+    buildFeatures { buildConfig = false }
 
     packaging {
-        resources {
-            excludes += ['/META-INF/{AL2.0,LGPL2.1}']
-        }
+        resources { excludes += ['/META-INF/{AL2.0,LGPL2.1}'] }
     }
 
     buildTypes {
-        debug {
-            minifyEnabled false
-        }
+        debug { minifyEnabled false }
         release {
             minifyEnabled true
             shrinkResources true
@@ -36,3 +30,10 @@ android {
         }
     }
 }
+
+tasks.register('copyWebAsset', Copy) {
+    from(rootProject.file('index.html'))
+    into(layout.projectDirectory.dir('src/main/assets'))
+    rename { 'index.html' }
+}
+preBuild.dependsOn(tasks.named('copyWebAsset'))
