@@ -2,7 +2,7 @@ name: Build Voice APK
 
 on:
   push:
-    branches: [main, master]
+    branches: ['**']
   workflow_dispatch:
 
 permissions:
@@ -34,20 +34,28 @@ jobs:
         with:
           gradle-version: '9.6.0'
 
-      - name: Verify project
+      - name: Build debug APK
         run: gradle :app:assembleDebug --stacktrace --no-daemon
 
       - name: Build release APK
         run: gradle :app:assembleRelease --stacktrace --no-daemon
+
+      - name: Verify APK outputs
+        run: |
+          test -s app/build/outputs/apk/debug/*.apk
+          test -s app/build/outputs/apk/release/*.apk
+          ls -lh app/build/outputs/apk/debug/*.apk app/build/outputs/apk/release/*.apk
 
       - name: Upload debug APK
         uses: actions/upload-artifact@v4
         with:
           name: Voice-debug-apk
           path: app/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
 
       - name: Upload release APK
         uses: actions/upload-artifact@v4
         with:
           name: Voice-release-apk
           path: app/build/outputs/apk/release/*.apk
+          if-no-files-found: error
