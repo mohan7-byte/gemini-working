@@ -2,7 +2,7 @@ name: Build Voice APK
 
 on:
   push:
-    branches: [main]
+    branches: ['**']
   workflow_dispatch:
 
 permissions:
