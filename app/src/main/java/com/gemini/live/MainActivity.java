@@ -7,27 +7,30 @@ import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.graphics.Color;
+import android.graphics.Typeface;
 import android.hardware.camera2.CameraCharacteristics;
 import android.hardware.camera2.CameraManager;
 import android.media.AudioManager;
-import android.net.Uri;
 import android.os.BatteryManager;
 import android.os.Bundle;
-import android.os.Handler;
-import android.os.Looper;
 import android.provider.Settings;
 import android.telephony.SmsManager;
+import android.net.Uri;
 import android.view.Gravity;
 import android.view.View;
-import android.widget.Button;
+import android.view.ViewGroup;
+import android.graphics.drawable.GradientDrawable;
 import android.widget.EditText;
+import android.widget.FrameLayout;
 import android.widget.LinearLayout;
-import android.widget.ScrollView;
+import android.widget.Spinner;
+import android.widget.ArrayAdapter;
+import android.widget.Switch;
 import android.widget.TextView;
 
 import org.json.JSONObject;
 
-/** Native Android entry point. No WebView, Chromium, HTML, or JavaScript runtime. */
+/** Native Android UI and controller. No WebView, Chromium, HTML, or JavaScript runtime. */
 public final class MainActivity extends Activity implements NativeGeminiClient.Listener {
     static MainActivity instance;
     private static final int REQ_AUDIO = 41;
@@ -38,93 +41,249 @@ public final class MainActivity extends Activity implements NativeGeminiClient.L
             "You are Voice, a fast autonomous Android agent. Read the Android screen before interacting with another app. " +
             "Use element IDs when possible, keep confirmations concise, and execute actions in sequence.";
 
-    private final Handler main = new Handler(Looper.getMainLooper());
     private SharedPreferences prefs;
     private NativeGeminiClient client;
-    private TextView status;
-    private TextView detail;
+    private TextView stateText;
+    private TextView detailText;
+    private TextView micButton;
+    private FrameLayout root;
+    private LinearLayout sheet;
     private EditText apiKey;
-    private EditText model;
-    private EditText voice;
     private EditText prompt;
+    private Spinner model;
+    private Spinner voice;
+    private boolean intentionalStop;
 
     @Override protected void onCreate(Bundle state) {
         super.onCreate(state);
         instance = this;
         prefs = getSharedPreferences(PREFS, MODE_PRIVATE);
-        getWindow().setStatusBarColor(Color.BLACK);
-        getWindow().setNavigationBarColor(Color.BLACK);
+        getWindow().setStatusBarColor(Color.TRANSPARENT);
+        getWindow().setNavigationBarColor(Color.TRANSPARENT);
+        getWindow().getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_LAYOUT_STABLE
+                | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN | View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION);
         buildUi();
     }
 
     private int dp(int value) { return Math.round(value * getResources().getDisplayMetrics().density); }
 
-    private TextView label(String text, float size) {
-        TextView v = new TextView(this);
-        v.setText(text); v.setTextSize(size); v.setTextColor(Color.WHITE);
-        v.setPadding(0, dp(6), 0, dp(6));
-        return v;
+    private GradientDrawable bg(int color, float radius) {
+        GradientDrawable d = new GradientDrawable();
+        d.setColor(color);
+        d.setCornerRadius(dp((int) radius));
+        return d;
     }
 
-    private EditText input(String hint, String value) {
+    private TextView text(String value, float size, int color) {
+        TextView t = new TextView(this);
+        t.setText(value);
+        t.setTextSize(size);
+        t.setTextColor(color);
+        return t;
+    }
+
+    private TextView button(String value, int height, View.OnClickListener listener) {
+        TextView t = text(value, 14, Color.WHITE);
+        t.setGravity(Gravity.CENTER);
+        t.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+        t.setBackground(bg(0xFF161B2A, 22));
+        t.setOnClickListener(listener);
+        t.setPadding(dp(16), 0, dp(16), 0);
+        t.setMinHeight(dp(height));
+        return t;
+    }
+
+    private EditText field(String value, String hint) {
         EditText e = new EditText(this);
-        e.setHint(hint); e.setText(value); e.setTextColor(Color.WHITE); e.setHintTextColor(0xFF8892A0);
-        e.setPadding(dp(8), dp(6), dp(8), dp(6));
+        e.setText(value);
+        e.setHint(hint);
+        e.setTextColor(Color.WHITE);
+        e.setHintTextColor(0xFF7D8796);
+        e.setTextSize(14);
+        e.setSingleLine(false);
+        e.setPadding(dp(14), dp(10), dp(14), dp(10));
+        e.setBackground(bg(0xF51A1F2E, 16));
         return e;
     }
 
-    private Button actionButton(String text, View.OnClickListener listener) {
-        Button b = new Button(this); b.setText(text); b.setOnClickListener(listener); return b;
-    }
-
     private void buildUi() {
-        ScrollView scroll = new ScrollView(this);
-        LinearLayout root = new LinearLayout(this);
-        root.setOrientation(LinearLayout.VERTICAL); root.setPadding(dp(18), dp(18), dp(18), dp(18));
-        root.setBackgroundColor(0xFF080A10);
+        root = new FrameLayout(this);
+        root.setBackgroundColor(Color.TRANSPARENT);
+        setContentView(root);
 
-        TextView title = label("VOICE • Native Android", 24); title.setGravity(Gravity.CENTER_HORIZONTAL); root.addView(title);
-        TextView subtitle = label("No WebView • No Chromium • Native audio", 13);
-        subtitle.setTextColor(0xFF9BA6B2); subtitle.setGravity(Gravity.CENTER_HORIZONTAL); root.addView(subtitle);
+        TextView backdrop = text("", 1, Color.TRANSPARENT);
+        backdrop.setBackgroundColor(0x01000000);
+        backdrop.setOnClickListener(v -> hideSheet());
+        root.addView(backdrop, new FrameLayout.LayoutParams(-1, -1));
 
-        status = label("Idle", 19); status.setGravity(Gravity.CENTER_HORIZONTAL); status.setPadding(0, dp(20), 0, dp(4)); root.addView(status);
-        detail = label("Ready", 13); detail.setTextColor(0xFF9BA6B2); detail.setGravity(Gravity.CENTER_HORIZONTAL); root.addView(detail);
+        LinearLayout dock = new LinearLayout(this);
+        dock.setOrientation(LinearLayout.VERTICAL);
+        dock.setGravity(Gravity.CENTER_HORIZONTAL);
+        dock.setPadding(dp(16), dp(8), dp(16), dp(16));
+        dock.setBackground(bg(0xF20D101A, 28));
 
-        root.addView(actionButton("Start voice", v -> startSession()));
-        root.addView(actionButton("Stop voice", v -> stopSession()));
-        root.addView(actionButton("Accessibility settings", v -> startActivity(new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))));
+        LinearLayout top = new LinearLayout(this);
+        top.setGravity(Gravity.CENTER_VERTICAL);
+        TextView badge = text("VOICE", 13, 0xFFE9D5FF);
+        badge.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+        top.addView(badge, new LinearLayout.LayoutParams(0, dp(40), 1));
+        stateText = text("Idle", 17, Color.WHITE);
+        stateText.setGravity(Gravity.CENTER);
+        top.addView(stateText, new LinearLayout.LayoutParams(0, dp(40), 1));
+        TextView settings = text("⚙", 22, Color.WHITE);
+        settings.setGravity(Gravity.CENTER);
+        settings.setOnClickListener(v -> showSheet());
+        top.addView(settings, new LinearLayout.LayoutParams(dp(44), dp(40)));
+        dock.addView(top);
 
-        root.addView(label("Settings", 18));
-        apiKey = input("Gemini API key", prefs.getString("api_key", ""));
-        model = input("Live model", prefs.getString("model", DEFAULT_MODEL));
-        voice = input("Voice", prefs.getString("voice", DEFAULT_VOICE));
-        prompt = input("System prompt", prefs.getString("prompt", DEFAULT_PROMPT)); prompt.setMinLines(4);
-        root.addView(apiKey); root.addView(model); root.addView(voice); root.addView(prompt);
-        root.addView(actionButton("Save settings", v -> saveSettings()));
+        detailText = text("Ready", 12, 0xFF9AA5B4);
+        detailText.setGravity(Gravity.CENTER);
+        dock.addView(detailText, new LinearLayout.LayoutParams(-1, dp(28)));
 
-        TextView memory = label("RAM strategy: audio/network are allocated only while a session is active; no browser engine is started.", 12);
-        memory.setTextColor(0xFF9BA6B2); memory.setPadding(0, dp(14), 0, dp(4)); root.addView(memory);
+        LinearLayout actions = new LinearLayout(this);
+        actions.setGravity(Gravity.CENTER);
+        actions.setPadding(0, dp(4), 0, 0);
+        micButton = text("Start voice", 14, Color.WHITE);
+        micButton.setGravity(Gravity.CENTER);
+        micButton.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+        micButton.setBackground(bg(0xFF7C3AED, 24));
+        micButton.setOnClickListener(v -> toggleVoice());
+        actions.addView(micButton, new LinearLayout.LayoutParams(0, dp(52), 1));
+        TextView access = text("A", 15, Color.WHITE);
+        access.setGravity(Gravity.CENTER);
+        access.setBackground(bg(0xFF23283A, 24));
+        access.setOnClickListener(v -> startActivity(new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)));
+        LinearLayout.LayoutParams ap = new LinearLayout.LayoutParams(dp(52), dp(52));
+        ap.leftMargin = dp(8);
+        actions.addView(access, ap);
+        dock.addView(actions);
 
-        scroll.addView(root); setContentView(scroll);
+        LinearLayout.LayoutParams dockLp = new LinearLayout.LayoutParams(dp(360), ViewGroup.LayoutParams.WRAP_CONTENT);
+        dockLp.gravity = Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL;
+        dockLp.bottomMargin = dp(18);
+        root.addView(dock, dockLp);
+
+        buildSettingsSheet();
     }
+
+    private void buildSettingsSheet() {
+        sheet = new LinearLayout(this);
+        sheet.setOrientation(LinearLayout.VERTICAL);
+        sheet.setPadding(dp(18), dp(18), dp(18), dp(18));
+        sheet.setBackground(bg(0xF7181C2B, 28));
+
+        FrameLayout titleRow = new FrameLayout(this);
+        TextView title = text("Configuration & Knowledge", 17, Color.WHITE);
+        title.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+        titleRow.addView(title, new FrameLayout.LayoutParams(-1, dp(42)));
+        TextView close = text("×", 24, 0xFFCBD5E1);
+        close.setGravity(Gravity.CENTER);
+        close.setOnClickListener(v -> hideSheet());
+        titleRow.addView(close, new FrameLayout.LayoutParams(dp(40), dp(40), Gravity.RIGHT | Gravity.TOP));
+        sheet.addView(titleRow);
+
+        TextView note = text("Native mode • no browser engine", 12, 0xFF9AA5B4);
+        sheet.addView(note, new LinearLayout.LayoutParams(-1, dp(28)));
+
+        TextView keyLabel = text("GEMINI API KEY", 11, 0xFF9AA5B4);
+        sheet.addView(keyLabel);
+        apiKey = field(prefs.getString("api_key", ""), "AIza...");
+        apiKey.setInputType(android.text.InputType.TYPE_CLASS_TEXT | android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD);
+        sheet.addView(apiKey, new LinearLayout.LayoutParams(-1, dp(54)));
+
+        TextView modelLabel = text("TARGET MODEL", 11, 0xFF9AA5B4);
+        modelLabel.setPadding(0, dp(12), 0, dp(4));
+        sheet.addView(modelLabel);
+        model = spinner(new String[]{"models/gemini-3.1-flash-live-preview", "models/gemini-2.5-flash-live-preview"},
+                prefs.getString("model", DEFAULT_MODEL));
+        sheet.addView(model, new LinearLayout.LayoutParams(-1, dp(52)));
+
+        TextView voiceLabel = text("VOICE PROFILE", 11, 0xFF9AA5B4);
+        voiceLabel.setPadding(0, dp(10), 0, dp(4));
+        sheet.addView(voiceLabel);
+        voice = spinner(new String[]{"Aoede", "Puck", "Kore", "Charon", "Fenrir"}, prefs.getString("voice", DEFAULT_VOICE));
+        sheet.addView(voice, new LinearLayout.LayoutParams(-1, dp(52)));
+
+        addSwitch("Auto-Disconnect on Silence (4s)", "Automatically close after finishing action", false);
+        addSwitch("Auto-Connect on Launch", "Listen immediately when triggered", false);
+        addSwitch("Speaker Echo Guard", "Prevents speaker acoustic feedback loop", true);
+        addSwitch("Bluetooth Priority Mode", "Keep audio on media speaker", true);
+
+        TextView promptLabel = text("ASSISTANT INSTRUCTIONS (JARVIS PROTOCOL)", 11, 0xFF9AA5B4);
+        promptLabel.setPadding(0, dp(12), 0, dp(4));
+        sheet.addView(promptLabel);
+        prompt = field(prefs.getString("prompt", DEFAULT_PROMPT), "Instructions");
+        prompt.setMinHeight(dp(118));
+        sheet.addView(prompt, new LinearLayout.LayoutParams(-1, dp(118)));
+
+        TextView save = button("Save settings", 48, v -> saveSettings());
+        LinearLayout.LayoutParams sp = new LinearLayout.LayoutParams(-1, dp(48));
+        sp.topMargin = dp(12);
+        sheet.addView(save, sp);
+
+        FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(-1,
+                Math.round(getResources().getDisplayMetrics().heightPixels * 0.86f), Gravity.BOTTOM);
+        lp.leftMargin = dp(8); lp.rightMargin = dp(8); lp.bottomMargin = dp(8);
+        root.addView(sheet, lp);
+        sheet.setVisibility(View.GONE);
+    }
+
+    private Spinner spinner(String[] values, String selected) {
+        Spinner s = new Spinner(this);
+        ArrayAdapter<String> a = new ArrayAdapter<String>(this, android.R.layout.simple_spinner_dropdown_item, values) {
+            @Override public View getView(int position, View convertView, ViewGroup parent) {
+                TextView v = (TextView) super.getView(position, convertView, parent);
+                v.setTextColor(Color.WHITE); v.setTextSize(14); v.setPadding(dp(12), dp(8), dp(12), dp(8));
+                return v;
+            }
+        };
+        s.setAdapter(a);
+        for (int i = 0; i < values.length; i++) if (values[i].equals(selected)) { s.setSelection(i); break; }
+        s.setBackground(bg(0xF51A1F2E, 16));
+        return s;
+    }
+
+    private void addSwitch(String title, String subtitle, boolean checked) {
+        LinearLayout row = new LinearLayout(this);
+        row.setGravity(Gravity.CENTER_VERTICAL);
+        row.setPadding(0, dp(4), 0, dp(4));
+        LinearLayout copy = new LinearLayout(this);
+        copy.setOrientation(LinearLayout.VERTICAL);
+        copy.addView(text(title, 14, Color.WHITE));
+        copy.addView(text(subtitle, 11, 0xFF8E98A7));
+        row.addView(copy, new LinearLayout.LayoutParams(0, dp(52), 1));
+        Switch sw = new Switch(this);
+        sw.setChecked(checked);
+        row.addView(sw, new LinearLayout.LayoutParams(dp(58), dp(48)));
+        sheet.addView(row);
+    }
+
+    private void showSheet() { sheet.setVisibility(View.VISIBLE); }
+    private void hideSheet() { sheet.setVisibility(View.GONE); }
 
     private void saveSettings() {
-        prefs.edit().putString("api_key", apiKey.getText().toString().trim())
-                .putString("model", model.getText().toString().trim())
-                .putString("voice", voice.getText().toString().trim())
-                .putString("prompt", prompt.getText().toString()).apply();
-        setState("Saved", "Settings stored locally");
+        prefs.edit()
+                .putString("api_key", apiKey.getText().toString().trim())
+                .putString("model", String.valueOf(model.getSelectedItem()))
+                .putString("voice", String.valueOf(voice.getSelectedItem()))
+                .putString("prompt", prompt.getText().toString().trim())
+                .apply();
+        detailText.setText("Settings saved");
+        hideSheet();
     }
+
+    private void toggleVoice() { if (client != null) stopSession(); else startSession(); }
 
     private void startSession() {
         if (client != null) return;
-        saveSettings();
+        intentionalStop = false;
         String key = prefs.getString("api_key", "").trim();
-        if (key.isEmpty()) { setState("Waiting", "Enter a Gemini API key"); return; }
+        if (key.isEmpty()) { showSheet(); detailText.setText("Add your Gemini API key"); return; }
         if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
-            requestPermissions(new String[]{Manifest.permission.RECORD_AUDIO}, REQ_AUDIO); return;
+            requestPermissions(new String[]{Manifest.permission.RECORD_AUDIO}, REQ_AUDIO);
+            return;
         }
-        setState("Connecting", "Native audio link");
+        setState("Connecting", "Opening native audio link");
         client = new NativeGeminiClient(this, key,
                 prefs.getString("model", DEFAULT_MODEL), prefs.getString("voice", DEFAULT_VOICE),
                 prefs.getString("prompt", DEFAULT_PROMPT), true);
@@ -132,12 +291,21 @@ public final class MainActivity extends Activity implements NativeGeminiClient.L
     }
 
     private void stopSession() {
-        NativeGeminiClient c = client; client = null;
-        if (c != null) c.stop(); setState("Idle", "Ready");
+        intentionalStop = true;
+        NativeGeminiClient c = client;
+        client = null;
+        if (c != null) c.stop();
+        setState("Idle", "Ready");
     }
 
-    private void setState(String title, String text) {
-        main.post(() -> { if (status != null) status.setText(title); if (detail != null) detail.setText(text); });
+    private void setState(String title, String detail) {
+        runOnUiThread(() -> {
+            stateText.setText(title);
+            detailText.setText(detail == null ? "" : detail);
+            micButton.setText("Listening".equals(title) || "Speaking".equals(title) || "Working".equals(title) || "Connecting".equals(title) ? "Stop voice" : "Start voice");
+            int color = "Error".equals(title) ? 0xFFDC2626 : ("Idle".equals(title) ? 0xFF7C3AED : 0xFF9333EA);
+            micButton.setBackground(bg(color, 24));
+        });
     }
 
     @Override public void onState(String state, String d) {
@@ -145,11 +313,26 @@ public final class MainActivity extends Activity implements NativeGeminiClient.L
                 "working".equals(state) ? "Working" : "connecting".equals(state) ? "Connecting" : state;
         setState(title, d);
     }
-    @Override public void onError(String error) { setState("Error", error == null ? "Unknown error" : error); }
-    @Override public void onClosed() { main.post(this::stopSession); }
+
+    @Override public void onError(String error) {
+        client = null;
+        setState("Error", error == null ? "Unknown error" : error);
+    }
+
+    @Override public void onClosed() {
+        if (!intentionalStop) {
+            client = null;
+            setState("Disconnected", "Connection closed — tap Start voice to retry");
+        }
+    }
 
     @Override protected void onDestroy() {
-        stopSession(); instance = null; super.onDestroy();
+        intentionalStop = true;
+        NativeGeminiClient c = client;
+        client = null;
+        if (c != null) c.stop();
+        instance = null;
+        super.onDestroy();
     }
 
     @Override public void onTrimMemory(int level) {
@@ -195,7 +378,7 @@ public final class MainActivity extends Activity implements NativeGeminiClient.L
                 case "create_note": return a.openUrl("mailto:?subject=Voice%20Note&body=" + Uri.encode(args.optString("text", "")));
                 case "search_contacts": return "Contacts search requires the native contacts layer.";
                 case "save_app_rule": return "Rule storage requires the native playbook layer.";
-                case "capture_screen": return "Screen capture is not active in the lightweight build yet.";
+                case "capture_screen": return "Screen capture will be enabled by the native capture service.";
                 case "search_internet": return a.openUrl("https://www.google.com/search?q=" + Uri.encode(args.optString("query", "")));
                 default: return "Unsupported native tool: " + name;
             }
